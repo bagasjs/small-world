@@ -47,11 +47,18 @@ Node *last_node  = NULL;
 size_t total_nodes = 0;
 size_t total_links = 0;
 
+float avg_steps = 0;
+size_t calc_total_nodes = 0;
+size_t calc_total_links = 0;
+
 void free_all_regions(void)
 {
     NodeRegion *r = first_region;
     while(r != NULL) {
         NodeRegion *rp = r;
+        for(size_t i = 0; i < rp->count; ++i) {
+            free(rp->items[i].links);
+        }
         r = r->next;
         free(rp);
     }
@@ -72,9 +79,9 @@ Node *node_alloc(void)
         memset(first_region, 0, sizeof(*first_region));
         last_region  = first_region;
     }
-    while(last_region->count + 1 < NODE_REGION_CAPACITY && last_region->next != NULL) 
+    while(last_region->count + 1 > NODE_REGION_CAPACITY && last_region->next != NULL) 
         last_region = last_region->next;
-    if(last_region->count + 1 < NODE_REGION_CAPACITY) {
+    if(last_region->count + 1 > NODE_REGION_CAPACITY) {
         NodeRegion *new = malloc(sizeof(NodeRegion));
         memset(new, 0, sizeof(*new));
         last_region->next = new;
@@ -117,6 +124,21 @@ void node_connect(Node *a, Node *b)
     total_links += 1;
 }
 
+float calculate_avg_steps(void)
+{
+    if (!first_node) return 0.0;
+    float total = 0.0;
+    size_t count = 0;
+
+    Node *node = first_node;
+    do {
+        node = node->next;
+    } while(node != first_node);
+
+    if(count == 0) return 0;
+    return total/count;
+}
+
 Node *find_nearest_node_within(int x, int y, int radius)
 {
     if (!first_node) return NULL;
@@ -141,7 +163,7 @@ Node *find_nearest_node_within(int x, int y, int radius)
     return nearest;
 }
 
-void reset_simulation(size_t populations)
+void reset_simulation(void)
 {
     reset_all_regions();
     first_node = NULL;
@@ -156,14 +178,18 @@ int main(void)
 {
     InitWindow(800, 600, "Small World");
 
-    reset_simulation(0);
+    reset_simulation();
     Node *selected = NULL;
     while(!WindowShouldClose()) {
         ClearBackground(pallete[COLOR_BACKGROUND]);
         BeginDrawing();
         int fps = GetFPS();
-        SetWindowTitle(TextFormat("Small World - FPS: %d, Nodes: %zu, Links: %zu", fps, total_nodes, total_links));
+        SetWindowTitle(TextFormat("Small World - FPS: %d, Nodes: %zu, Links: %zu, Avg. Steps: %5.2f", 
+                    fps, total_nodes, total_links, avg_steps));
         Vector2 cursor = GetMousePosition();
+        if(IsKeyPressed(KEY_R)) {
+            reset_simulation();
+        }
         if(IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
             Node *node = node_alloc();
             node->x = cursor.x;
@@ -205,6 +231,12 @@ int main(void)
                 Node *link = node->links[i];
                 DrawLine(node->x, node->y, link->x, link->y, RED);
             }
+        }
+
+        if(calc_total_links != total_links || calc_total_nodes != total_nodes) {
+            avg_steps = calculate_avg_steps();
+            calc_total_links = total_links;
+            calc_total_nodes = total_nodes;
         }
 
         EndDrawing();
